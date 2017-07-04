@@ -14,12 +14,14 @@
     - name: Disable password authentication
       lineinfile:
         dest: /etc/ssh/sshd_config
+        regexp: "^#? *PasswordAuthentication"
         line: PasswordAuthentication no
       notify: reload ssh
 
     - name: Disable direct root access
       lineinfile:
         dest: /etc/ssh/sshd_config
+        regexp: "^#? *PermitRootLogin"
         line: PermitRootLogin no
       notify: reload ssh
 
