@@ -219,7 +219,7 @@
       changed_when: "'OPAM has already been initialized.' not in everest_opam.stdout"
 
     - name: Setup OPAM switch
-      command: opam switch install everest --alias-of 4.04.2+flambda
+      command: opam switch install everest --alias-of 4.04.1+flambda
       args:
         creates: /home/{{ ansible_user }}/.opam/everest
 
