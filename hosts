@@ -1,0 +1,5 @@
+[build]
+nbraud ansible_host=10.151.1.147
+
+[build:vars]
+ansible_user=t-nibrau

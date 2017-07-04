@@ -1,0 +1,285 @@
+---
+- name: Setup firewall
+  hosts: build
+  become: True
+  roles:
+    - role: debops.ferm
+      tags: [ 'role::ferm' ]
+
+- name: Configure SSHd
+  hosts: build
+  become: True
+  tags: [ 'ssh' ]
+  tasks:
+    - name: Disable password authentication
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        line: PasswordAuthentication no
+      notify: reload ssh
+
+    - name: Disable direct root access
+      lineinfile:
+        dest: /etc/ssh/sshd_config
+        line: PermitRootLogin no
+      notify: reload ssh
+
+  handlers:
+    - name: reload ssh
+      service:
+        name:  ssh
+        state: reloaded
+
+- name: Package management
+  hosts: build
+  become: True
+  tags: [ 'pkg' ]
+  tasks:
+    - name: Configure APT
+      copy:
+        dest: /etc/apt/apt.conf.d/00InstallRecommends
+        content: |
+          APT::Install-Recommends "false";
+          APT::Install-Suggests   "false";
+
+    - name: Purge waagent
+      apt: name=waagent state=absent purge=yes
+
+    - name: Install packages
+      apt: name={{item}} state=installed
+      with_items:
+        - apparmor
+        - command-not-found
+        - debian-keyring
+        - direnv
+        - git
+        - gnupg2
+        - htop
+        - man-db
+        - manpages
+        - molly-guard
+        - mosh
+        - stow
+        - tig
+        - tor
+        - zsh
+
+- name: Manage SSH keys
+  hosts: build
+  tags: [ 'ssh', 'credentials' ]
+  tasks:
+    - authorized_key:
+        user: "{{ ansible_user }}"
+        key:  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIBRBGNP7xDzMvc/FfD+tSU1w9l3OsyfQewZjfDMphgS
+        exclusive: yes
+
+- name: Manage dotfiles
+  hosts: build
+  tags: [ 'dotfiles' ]
+  tasks:
+    - block:
+        - name: Copy OpenPGP key
+          copy:
+            src: files/nbraud.asc
+            dest: /tmp/nbraud.asc
+        - name: Import OpenPGP key
+          command: gpg --import /tmp/nbraud.asc
+          register: dotfiles_gpg
+          changed_when: "'unchanged: 1' not in dotfiles_gpg.stderr"
+
+      always:
+        - name: Delete temporary file
+          file:
+            path: files/nbraud.asc
+            state: absent
+
+    - name: Trust GPG key (ultimately)
+      shell: 'echo 722B11B4F2DC80E1212B3F41B0739AAD91B7CDC0:6: | gpg --import-ownertrust'
+      when: dotfiles_gpg.changed
+
+    - name: Clone dotfiles
+      git:
+        repo: https://github.com/nbraud/.dotfiles
+        dest: /home/{{ ansible_user }}/.dotfiles
+        update: no
+        verify_commit: yes
+      register: dotfiles
+
+    - name: Remove GnuPG config
+      shell: rm -f ~/.gnupg/*.conf
+      when: dotfiles.changed
+      
+    - command: stow -R debian emacs git gnupg zsh
+      args:
+        chdir: /home/{{ ansible_user }}/.dotfiles
+      when: dotfiles.changed
+
+    - user:
+        name: "{{ ansible_user }}"
+        shell: /usr/bin/zsh
+
+
+- name: Setup everest environment
+  hosts: build
+  tags: [ 'everest' ]
+  tasks:
+
+    - become: True
+      block:
+        - name: Fetch key for mono-project.com deb repo
+          apt_key:
+            id: 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
+            keyring: /etc/apt/trusted.gpg.d/mono-project.com.gpg
+            data: |
+              -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+              mQENBFPfqCcBCADctOzyTxfWvf40Nlb+AMkcJyb505WSbzhWU8yPmBNAJOnbwueM
+              sTkNMHEOu8fGRNxRWj5o/Db1N7EoSQtK3OgFnBef8xquUyrzA1nJ2aPfUWX+bhTG
+              1TwyrtLaOssFRz6z/h/ChUIFvt2VZCw+Yx4BiKi+tvgwrHTYB/Yf2J9+R/1O6949
+              n6veFFRBfgPOL0djhvRqXzhvFjJkh4xhTaGVeOnRR3+YQkblmti2n6KYl0n2kNB4
+              0ujSqpTloSfnR5tmJpz00WoOA9MJBdvHtxTTn8l6rVzXbm4mW9ZmB1kht/BgWaNL
+              aIisW5AZSkQKer35wOWf0G7Gw+cWHq+I7W9pABEBAAG0OlhhbWFyaW4gUHVibGlj
+              IEplbmtpbnMgKGF1dG8tc2lnbmluZykgPHJlbGVuZ0B4YW1hcmluLmNvbT6JATgE
+              EwECACIFAlPfqCcCGwMGCwkIBwMCBhUIAgkKCwQWAgMBAh4BAheAAAoJEKahmzjT
+              2DHvkOgH/2Hmny7VxRLLoynY+ONbf3wsllqpbBprZb+VwsQo3uhZMLlh/kES5Ww7
+              3bvSlWWf0K/uGKpxsLyTLCT6xm9Gxg7e6hNHCyYiZz/u5orfzaF7LUDaG+Qfl9ge
+              Zj/ln9nRub8DSTRyGEbbJyNaNldgtn3ojRVTdkFAEeiHepG2BarjJZOwIkFf4Uo8
+              F2aQimBw9dDD6FqTSaPawguqNJxFlPU575Ymww0xotrx1J3D6k+bw0z9UYuY72JN
+              MMCm4CxGLGkJgt0lj5OEY2sp7rEOzBCjyCveBsGQmLTAtEM/ZHOrusPRMLY/E5pY
+              5nuGbLP4SGMtyNmEc0lNpr41XSTxgDC5AQ0EU9+oJwEIAK1zseywL1Lc/EmbXKi6
+              8Z9guGb4rMw76AijLtHfZVchk3GuQxjNp56upKwzDF2ESPI6xxP6sltEZn72I84Z
+              6HgCpmXPM67FD8uDmH7aYZVd7QC9v4DbMLnqYtJAIvdbw2MAFRl2SedzVgh/0PPT
+              l/LiM8S201LL5HO17QhMsfUfL88oGuUXmf4bX/zp/cvmfVlleZXe+L6tdP87ISH3
+              FFLi6yZHqRWHijZcaUjNStSOFm9viXGsd9aDMqVYWhRLJ1pkOTt6KRMoXr3ZGJJK
+              ktsMtbaw053NPZ6q/YHwIlEXmwtsPoEHd0Bsfsp+oqIJPfFwJmE0RnD4z4ZxE78c
+              1ucAEQEAAYkBHwQYAQIACQUCU9+oJwIbDAAKCRCmoZs409gx76w1CADCOb08njm3
+              s0E1NefXNp2hBBs+rP2oCVaIgjST7PMkJNNWqDIhclgjrN02IH86HVdqOz9P3P20
+              vnj4suqC1kprSXMM6ZzGfoi6N/drUwV1jEqBpC1PYAPECKa4GjPdjWiHFeACzb5U
+              hJZig8Ej5RaFiqDXXOre7CkUhhAFGCRXJ0LF58LFjX2iQ2n0U8Lsok+kmQ42AMAr
+              r3dj2Y5ldKr5d4aGPLdLF6yXQ9gsh9XffP68KlzajV0MDnC7JyB+q6k1AhORCbqA
+              84fWMu7xW22bh90S1UxyqSfx0kWiajclberEjshbCNtVGDXQbwsYC4FsPoIDR0ZJ
+              /w+QcVi/Zex1
+              =25l4
+              -----END PGP PUBLIC KEY BLOCK-----
+            
+        - apt_repository:
+            repo: deb http://download.mono-project.com/repo/debian/ stretch main
+    
+    - name: Install required packages
+      become: True
+      apt: name={{item}} state=installed
+      with_items:
+        - build-essential
+        - fsharp
+        - git
+        - libgmp3-dev
+        - m4
+        - mono-complete
+        - opam
+
+    - name: Create ~/everest
+      file: path=/home/{{ ansible_user }}/everest state=directory
+      register: everest
+
+    - name: Create direnv file for everest
+      copy:
+        dest: /home/{{ ansible_user }}/everest/.envrc
+        content: |
+          # -*- sh -*-
+          export FSTAR_HOME="${PWD}/fstar"
+          export KREMLIN_HOME="${PWD}/kremlin"
+          export HACL_HOME="${PWD}/hacl"
+          export DAFNY_Z3_PATH="${PWD}/z3/build"
+          export OTHERFLAGS="--print_z3_statistics"
+
+          eval $(opam config env --switch=everest)
+          
+          PATH_add "${DAFNY_Z3_PATH}"
+          PATH_add "${FSTAR_HOME}/bin"
+          PATH_add "${KREMLIN_HOME}"
+      register: everest_direnv
+
+    - name: Activate direnv file
+      command: direnv allow "/home/{{ ansible_user }}/everest/.envrc"
+      when: everest_direnv.changed
+
+    - name: Initialize OPAM
+      command: opam init --no-setup
+      register: everest_opam
+      changed_when: "'OPAM has already been initialized.' not in everest_opam.stdout"
+
+    - name: Setup OPAM switch
+      command: opam switch install everest --alias-of 4.04.2+flambda
+      args:
+        creates: /home/{{ ansible_user }}/.opam/everest
+
+    - name: Install OPAM packages
+      command: opam install -j16 --switch everest utop ocamlbuild ocamlfind batteries stdint zarith yojson fileutils pprint
+      # TODO changed_when
+
+    - name: Cloning repositories
+      git:
+        repo: https://github.com/{{ item.value.repo }}
+        dest: /home/{{ ansible_user }}/everest/{{ item.key }}
+        recursive: no
+        update: no
+        version: "{{ item.value.get('version') or 'HEAD' }}"
+      with_dict:
+        fstar:
+          repo: FStarLang/FStar
+        kremlin:
+          repo: FStarLang/kremlin
+        hacl:
+          repo: mitls/hacl-star
+        mitls:
+          repo: mitls/mitls-fstar
+        vale:
+          repo: project-everest/vale
+        z3:
+          repo: https://github.com/Z3Prover/z3
+          version: z3-4.5.0
+
+      register: everest_clone
+
+    - name: Setting up push targets
+      command: git remote set-url --push origin github.com:{{ item.item.value.repo }}
+      args:
+        chdir: /home/{{ ansible_user }}/everest/{{ item.item.key }}
+      when: "{{ item.changed }}"
+      with_items: "{{ everest_clone.results }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
+    - block:
+        - name: Compile F* from F#
+          command: make -C src nuget-restore all
+          args:
+            chdir: /home/{{ ansible_user }}/everest/fstar
+
+        - name: OCaml extraction
+          command: make -C src -j16 ocaml
+          args:
+            chdir: /home/{{ ansible_user }}/everest/fstar
+
+        - name: Recompile F* from OCaml
+          command: make -C src/ocaml-output -j16
+          args:
+            chdir: /home/{{ ansible_user }}/everest/fstar
+
+      # TODO
+      # when: "{{ all(r.item.key != 'fstar' or not r.changed for r in everest_clone.results) }}"
+
+    - block:
+        - name: Configure Z3
+          command: python scripts/mk_make.py
+          args:
+            chdir: /home/{{ ansible_user }}/everest/z3
+
+        - name: Compile Z3
+          command: make -C build -j16
+          args:
+            chdir: /home/{{ ansible_user }}/everest/z3
+
+      # TODO
+      # when: "all(r.item.key != 'z3' or not r.changed for r in everest_clone.results)"
+
+      

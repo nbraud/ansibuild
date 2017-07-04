@@ -1,0 +1,6 @@
+[submodule "roles/debops.samba"]
+	path = roles/debops.samba
+	url = https://github.com/debops/ansible-samba/
+[submodule "roles/debops.ferm"]
+	path = roles/debops.ferm
+	url = https://github.com/debops/ansible-ferm
