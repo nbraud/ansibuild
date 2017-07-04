@@ -31,10 +31,10 @@
         name:  ssh
         state: reloaded
 
-- name: Package management
+
+- name: Customize server
   hosts: build
   become: True
-  tags: [ 'pkg' ]
   tasks:
     - name: Configure APT
       copy:
@@ -64,6 +64,15 @@
         - tig
         - tor
         - zsh
+
+    - name: Make /tmp a tmpfs
+      mount:
+        name:   /tmp
+        src:    tmpfs
+        fstype: tmpfs
+        opts:   nodev,nosuid
+        state:  present
+
 
 - name: Manage SSH keys
   hosts: build
