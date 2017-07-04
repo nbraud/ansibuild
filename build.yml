@@ -246,7 +246,7 @@
         vale:
           repo: project-everest/vale
         z3:
-          repo: https://github.com/Z3Prover/z3
+          repo: Z3Prover/z3
           version: z3-4.5.0
 
       register: everest_clone
