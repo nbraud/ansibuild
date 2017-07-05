@@ -225,11 +225,11 @@
         creates: /home/{{ ansible_user }}/.opam/everest
 
     - name: Install required OPAM packages
-      command: opam install -j16 --switch everest ocamlbuild ocamlfind batteries stdint zarith yojson fileutils pprint
+      command: opam install -j{{ ansible_processor_vcpus }} --switch everest ocamlbuild ocamlfind batteries stdint zarith yojson fileutils pprint
       # TODO changed_when
 
     - name: Install extra OCaml goodies
-      command: opam install -j16 --switch everest utop merlin
+      command: opam install -j{{ ansible_processor_vcpus }} --switch everest utop merlin
       # TODO changed_when
 
     - name: Cloning repositories
@@ -272,12 +272,12 @@
             chdir: /home/{{ ansible_user }}/everest/fstar
 
         - name: OCaml extraction
-          command: make -C src -j16 ocaml
+          command: make -C src -j{{ ansible_processor_vcpus }} ocaml
           args:
             chdir: /home/{{ ansible_user }}/everest/fstar
 
         - name: Recompile F* from OCaml
-          command: make -C src/ocaml-output -j16
+          command: make -C src/ocaml-output -j{{ ansible_processor_vcpus }}
           args:
             chdir: /home/{{ ansible_user }}/everest/fstar
 
@@ -291,7 +291,7 @@
             chdir: /home/{{ ansible_user }}/everest/z3
 
         - name: Compile Z3
-          command: make -C build -j16
+          command: make -C build -j{{ ansible_processor_vcpus }}
           args:
             chdir: /home/{{ ansible_user }}/everest/z3
 
