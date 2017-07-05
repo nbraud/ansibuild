@@ -224,8 +224,12 @@
       args:
         creates: /home/{{ ansible_user }}/.opam/everest
 
-    - name: Install OPAM packages
-      command: opam install -j16 --switch everest utop ocamlbuild ocamlfind batteries stdint zarith yojson fileutils pprint
+    - name: Install required OPAM packages
+      command: opam install -j16 --switch everest ocamlbuild ocamlfind batteries stdint zarith yojson fileutils pprint
+      # TODO changed_when
+
+    - name: Install extra OCaml goodies
+      command: opam install -j16 --switch everest utop merlin
       # TODO changed_when
 
     - name: Cloning repositories
