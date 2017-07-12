@@ -1,0 +1,4 @@
+samba_allow: "{{ ferm__ansible_controllers }}"
+samba_workgroup: EUROPE
+samba_server_string: Build system for t-nibrau
+samba_homes_path: /home
