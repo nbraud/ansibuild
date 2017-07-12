@@ -121,7 +121,14 @@
     - name: Remove GnuPG config
       shell: rm -f ~/.gnupg/*.conf
       when: dotfiles.changed
-      
+
+    - name: Create required directories
+      file:
+        path: /home/{{ ansible_user }}/.{{ item }}
+        state: directory
+        mode: '0700'
+      with_items: [ 'cache', 'config', 'local/bin', 'local/share' ]
+
     - command: stow -R debian emacs git gnupg zsh
       args:
         chdir: /home/{{ ansible_user }}/.dotfiles
