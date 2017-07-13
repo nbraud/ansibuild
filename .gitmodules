@@ -4,3 +4,6 @@
 [submodule "roles/debops.ferm"]
 	path = roles/debops.ferm
 	url = https://github.com/debops/ansible-ferm
+[submodule "roles/nbraud.dotfiles"]
+	path = roles/nbraud.dotfiles
+	url = https://github.com/nbraud/ansible.dotfiles
